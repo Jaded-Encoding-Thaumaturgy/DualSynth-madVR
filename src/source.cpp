@@ -14,6 +14,7 @@
 #define MADVRDLL_SUFFIX_AX L".ax"
 #endif
 
+const std::wstring vs_platform_name { L"vapoursynth" };
 const DWORD loadDwFlags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 
 std::wstring get_plugins_path() {
@@ -30,7 +31,8 @@ std::wstring get_plugins_path() {
 }
 
 HMODULE try_load_dll(
-    const std::wstring plugins_path, const std::wstring lib_filename, bool required = false, bool enable_global = true
+    const std::wstring plugins_path, const std::wstring lib_filename, const std::wstring platform_name,
+    bool required = false, bool enable_global = true
 ) {
     HMODULE madvr_module = LoadLibraryExW((plugins_path + lib_filename).c_str(), nullptr, loadDwFlags);
 
@@ -38,7 +40,7 @@ HMODULE try_load_dll(
         madvr_module = LoadLibraryExW(lib_filename.c_str(), nullptr, loadDwFlags);
 
     if (!madvr_module && required) {
-        OutputDebugString((L"Failed to load " + lib_filename).c_str());
+        std::wcout << platform_name << L"-madVR: Failed to load " << plugins_path + lib_filename << std::endl;
 
         return nullptr;
     }
@@ -205,15 +207,18 @@ VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc
 
     std::wstring plugins_path = get_plugins_path();
 
-    try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB);
-    try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB);
+    try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB, vs_platform_name);
+    try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB, vs_platform_name);
 
-    HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, true);
+    HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, vs_platform_name, true);
 
     *(FARPROC *) &madvr_vapoursynth_init = GetProcAddress(madvr_ax, "VapourSynth");
 
     if (!madvr_vapoursynth_init) {
-        OutputDebugString(L"Failed to find the VapourSynth init in madVR ax library\n");
+        std::wcout << vs_platform_name << L"-madVR: Failed to find the VapourSynth init in madVR ax library" << std::endl;
+
+        configFunc("madshi.madVR", "madVR", "madVR Toolbox", VAPOURSYNTH_API_VERSION, true, plugin);
+
         return;
     }
 
