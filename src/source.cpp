@@ -232,15 +232,25 @@ bool update_frame(
     return true;
 }
 
+VSConfigPlugin vs_globalConfigFunc;
+
+void vs_fakeConfigFunc(
+    const char *identifier, const char *defaultNamespace, const char *name, int apiVersion, int readonly,
+    VSPlugin *plugin
+) {
+    vs_globalConfigFunc(
+        "dev.setsugen.madVR", "madvr", "madVR VapourSynth Wrapper", VAPOURSYNTH_API_VERSION, true, plugin
+    );
+}
+
 VS_EXTERNAL_API(void)
 VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
+    vs_globalConfigFunc = configFunc;
+
     auto madvr_vs_init = get_platform_init<MADVRVapourSynthInit>(L"VapourSynth");
 
-    if (!madvr_vs_init) {
-        configFunc("madshi.madVR", "madVR", "madVR Toolbox", VAPOURSYNTH_API_VERSION, true, plugin);
+    if (!madvr_vs_init)
+        return vs_fakeConfigFunc("", "", "", 0, 0, nullptr);
 
-        return;
-    }
-
-    madvr_vs_init(configFunc, registerFunc, plugin, (void *) update_frame, 1);
+    madvr_vs_init(vs_fakeConfigFunc, registerFunc, plugin, (void *) update_frame, 1);
 }
