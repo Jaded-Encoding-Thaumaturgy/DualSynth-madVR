@@ -1,3 +1,4 @@
+#include <AviSynth.h>
 #include <VapourSynth.h>
 #include <Windows.h>
 #include <codecvt>
@@ -5,17 +6,6 @@
 #include <iostream>
 #include <locale>
 #include <vector>
-
-typedef void(VS_CC *MADVRVapourSynthInit)(
-    VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin, void *UpdateFrame, int version
-);
-
-struct MADVRDXFrameFormat {
-        uint32_t fourcc;
-        uint32_t field_4;
-        uint32_t field_8;
-        uint32_t field_C;
-};
 
 #define MADVR_LIBS_DIRPATH L"madVR\\"
 
@@ -26,6 +16,28 @@ struct MADVRDXFrameFormat {
 #define MADVRDLL_SUFFIX_LIB L"32.dll"
 #define MADVRDLL_SUFFIX_AX L".ax"
 #endif
+
+struct MADVRDXFrameFormat {
+        uint32_t fourcc;
+        uint32_t field_4;
+        uint32_t field_8;
+        uint32_t field_C;
+};
+
+typedef bool(VS_CC *UpdateFrameFunc)(
+    int n, const uint8_t *plane0_read, const uint8_t *plane1_read, const uint8_t *plane2_read, int bit_depth,
+    MADVRDXFrameFormat *frame_format, int luma_width, int luma_height, int luma_stride, int chroma_width,
+    int chroma_height, int chroma_stride, IDirect3DTexture9 *luma_tex, IDirect3DTexture9 *chroma_tex,
+    IDirect3DTexture9 *yuv444_tex, IDirect3DTexture9 *rgb_tex, bool *unused
+);
+
+typedef void(VS_CC *MADVRVapourSynthInit)(
+    VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin, void *UpdateFrame, int unused
+);
+
+typedef const char *(VS_CC *MADVRAviSynthInit)(
+    IScriptEnvironment *env, const AVS_Linkage * const vectors, UpdateFrameFunc UpdateFrame, int unused
+);
 
 const DWORD loadDwFlags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 
@@ -253,4 +265,14 @@ VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc
         return vs_fakeConfigFunc("", "", "", 0, 0, nullptr);
 
     madvr_vs_init(vs_fakeConfigFunc, registerFunc, plugin, (void *) update_frame, 1);
+}
+
+const AVS_Linkage *AVS_linkage = nullptr;
+extern "C" __declspec(dllexport) const
+    char *__stdcall AvisynthPluginInit3(IScriptEnvironment *env, const AVS_Linkage * const vectors) {
+    AVS_linkage = vectors;
+
+    auto madvr_avs_init = get_platform_init<MADVRAviSynthInit>(L"AviSynth");
+
+    return madvr_avs_init(env, vectors, update_frame, 1);
 }
