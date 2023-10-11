@@ -1,8 +1,21 @@
 #include <VapourSynth.h>
 #include <Windows.h>
+#include <codecvt>
 #include <d3d9.h>
 #include <iostream>
+#include <locale>
 #include <vector>
+
+typedef void(VS_CC *MADVRVapourSynthInit)(
+    VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin, void *UpdateFrame, int version
+);
+
+struct MADVRDXFrameFormat {
+        uint32_t fourcc;
+        uint32_t field_4;
+        uint32_t field_8;
+        uint32_t field_C;
+};
 
 #define MADVR_LIBS_DIRPATH L"madVR\\"
 
@@ -14,7 +27,6 @@
 #define MADVRDLL_SUFFIX_AX L".ax"
 #endif
 
-const std::wstring vs_platform_name { L"vapoursynth" };
 const DWORD loadDwFlags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 
 std::wstring get_plugins_path() {
@@ -48,16 +60,26 @@ HMODULE try_load_dll(
     return madvr_module;
 }
 
-typedef void(VS_CC *MADVRInitPlugin)(
-    VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin, void *UpdateFrame, int version
-);
+template<typename T>
+T get_platform_init(const std::wstring platform_name) {
+    T madvr_init = nullptr;
 
-struct MADVRDXFrameFormat {
-        uint32_t fourcc;
-        uint32_t field_4;
-        uint32_t field_8;
-        uint32_t field_C;
-};
+    std::wstring plugins_path = get_plugins_path();
+
+    try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB, platform_name);
+    try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB, platform_name);
+
+    HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, platform_name, true);
+
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+    *(FARPROC *) &madvr_init = GetProcAddress(madvr_ax, converter.to_bytes(platform_name).c_str());
+
+    if (!madvr_init)
+        std::wcout << platform_name << "-madVR: Failed to find the " << platform_name << " init in madVR ax library"
+                   << std::endl;
+
+    return madvr_init;
+}
 
 template<typename T, bool single_texture, int c_offset, int bps>
 void upload_frame(
@@ -203,24 +225,13 @@ bool update_frame(
 
 VS_EXTERNAL_API(void)
 VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
-    MADVRInitPlugin madvr_vapoursynth_init = nullptr;
+    auto madvr_vs_init = get_platform_init<MADVRVapourSynthInit>(L"VapourSynth");
 
-    std::wstring plugins_path = get_plugins_path();
-
-    try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB, vs_platform_name);
-    try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB, vs_platform_name);
-
-    HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, vs_platform_name, true);
-
-    *(FARPROC *) &madvr_vapoursynth_init = GetProcAddress(madvr_ax, "VapourSynth");
-
-    if (!madvr_vapoursynth_init) {
-        std::wcout << vs_platform_name << L"-madVR: Failed to find the VapourSynth init in madVR ax library" << std::endl;
-
+    if (!madvr_vs_init) {
         configFunc("madshi.madVR", "madVR", "madVR Toolbox", VAPOURSYNTH_API_VERSION, true, plugin);
 
         return;
     }
 
-    madvr_vapoursynth_init(configFunc, registerFunc, plugin, (void *) update_frame, 1);
+    madvr_vs_init(configFunc, registerFunc, plugin, (void *) update_frame, 1);
 }
