@@ -10,7 +10,7 @@ Add `-D MADVR_DEBUG` to create a binary that prints frame debug information.
 
 ### Installing
 
-Put the dll in your plugins folder, then also put these libraries:
+Put the dll in your VS/AVS plugins folder, then also put these libraries:
 
 #### For 32-bits:
 
@@ -30,7 +30,8 @@ Put the dll in your plugins folder, then also put these libraries:
 ### Using
 
 There is only one function:
-```core.madVR.Process(clip: VideoNode, commands: string[], adapter: bool)```
+VapourSynth: ```core.madvr.Process(clip: VideoNode, commands: string[], adapter: bool)```
+AviSynth+: ```madvr_Process(clip: Clip, commands: string[], adapter: bool)```
 
 `commands` is an array of functions to be ran in the madVR filterchain.
 
@@ -109,10 +110,16 @@ There is only one function:
 
 ### Example
 
+VapourSynth
 ```
 clip.madVR.Process([
     'convertToSDR(4000)',
     'deband(high)',
     'setOutputFormat(yuv444, 16)'
 ])
+```
+
+AviSynth+
+```
+madvr_Process(["convertToSDR(4000)", "deband(high)", "setOutputFormat(yuv444, 16)"])
 ```
