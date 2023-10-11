@@ -4,6 +4,8 @@
 #include <iostream>
 #include <vector>
 
+#define MADVR_LIBS_DIRPATH L"madVR\\"
+
 #ifdef _WIN64
 #define MADVRDLL_SUFFIX_LIB L"64.dll"
 #define MADVRDLL_SUFFIX_AX L"64.ax"
@@ -12,20 +14,30 @@
 #define MADVRDLL_SUFFIX_AX L".ax"
 #endif
 
-constexpr const wchar_t *MADVRDLL_DIRPATH = L".\\madVR\\";
+const DWORD loadDwFlags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 
-HMODULE try_load_dll(const std::wstring lib_filename, bool required = false, bool enable_global = true) {
-    HMODULE madvr_module;
+std::wstring get_plugins_path() {
+    HMODULE module;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR) &get_plugins_path, &module);
 
-    if (enable_global) {
-        madvr_module = LoadLibraryW((MADVRDLL_DIRPATH + lib_filename).c_str());
-    }
+    std::vector<wchar_t> pathBuf(65536);
+    GetModuleFileNameW(module, pathBuf.data(), (DWORD) pathBuf.size());
 
-    if (!madvr_module) {
-        madvr_module = LoadLibraryW(lib_filename.c_str());
-    }
+    std::wstring dllPath = pathBuf.data();
+    dllPath.resize(dllPath.find_last_of('\\') + 1);
 
-    if (required && !madvr_module) {
+    return dllPath + MADVR_LIBS_DIRPATH;
+}
+
+HMODULE try_load_dll(
+    const std::wstring plugins_path, const std::wstring lib_filename, bool required = false, bool enable_global = true
+) {
+    HMODULE madvr_module = LoadLibraryExW((plugins_path + lib_filename).c_str(), nullptr, loadDwFlags);
+
+    if (!madvr_module && enable_global)
+        madvr_module = LoadLibraryExW(lib_filename.c_str(), nullptr, loadDwFlags);
+
+    if (!madvr_module && required) {
         OutputDebugString((L"Failed to load " + lib_filename).c_str());
 
         return nullptr;
@@ -191,10 +203,12 @@ VS_EXTERNAL_API(void)
 VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
     MADVRInitPlugin madvr_vapoursynth_init = nullptr;
 
-    try_load_dll(L"madHcNet" MADVRDLL_SUFFIX_LIB);
-    try_load_dll(L"mvrSettings" MADVRDLL_SUFFIX_LIB);
+    std::wstring plugins_path = get_plugins_path();
 
-    HMODULE madvr_ax = try_load_dll(L"madVR" MADVRDLL_SUFFIX_AX, true);
+    try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB);
+    try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB);
+
+    HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, true);
 
     *(FARPROC *) &madvr_vapoursynth_init = GetProcAddress(madvr_ax, "VapourSynth");
 
