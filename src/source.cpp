@@ -81,7 +81,7 @@ T get_platform_init(const std::wstring platform_name) {
     return madvr_init;
 }
 
-template<typename T, bool single_texture, int c_offset, int bps>
+template<typename T, bool single_texture, int c_offset, int bps, int bit_shift>
 void upload_frame(
     D3DLOCKED_RECT *mlock, D3DLOCKED_RECT *clock, ptrdiff_t luma_stride, ptrdiff_t chroma_stride, const void *_src0_ptr,
     const void *_src1_ptr, const void *_src2_ptr, int luma_width, int luma_height, int chroma_width, int chroma_height
@@ -106,17 +106,17 @@ void upload_frame(
     for (int y = 0; y < luma_height; y++) {
         if constexpr (single_texture) {
             for (int x = 0; x < luma_width; x++) {
-                mdst_ptr[x * 4 + 0] = src0_ptr[x];
-                mdst_ptr[x * 4 + 1] = src1_ptr[x];
-                mdst_ptr[x * 4 + 2] = src2_ptr[x];
+                mdst_ptr[x * 4 + 0] = src0_ptr[x] << bit_shift;
+                mdst_ptr[x * 4 + 1] = src1_ptr[x] << bit_shift;
+                mdst_ptr[x * 4 + 2] = src2_ptr[x] << bit_shift;
             }
         } else {
             for (int x = 0; x < luma_width; x++) {
-                mdst_ptr[x] = src0_ptr[x];
+                mdst_ptr[x] = src0_ptr[x] << bit_shift;
 
                 if (x < chroma_width && y < chroma_height) {
-                    cdst_ptr[x * 4 + 0 + c_offset] = src1_ptr[x];
-                    cdst_ptr[x * 4 + 1 + c_offset] = src2_ptr[x];
+                    cdst_ptr[x * 4 + 0 + c_offset] = src1_ptr[x] << bit_shift;
+                    cdst_ptr[x * 4 + 1 + c_offset] = src2_ptr[x] << bit_shift;
                 }
             }
         }
@@ -173,10 +173,19 @@ bool update_frame(
     &mlock, &clock, (ptrdiff_t) luma_stride, (ptrdiff_t) chroma_stride, src0_ptr, src1_ptr, src2_ptr, luma_width, \
         luma_height, chroma_width, chroma_height
 
-    if (hbd) {
-        single_texture ? upload_frame<uint16_t, true, 0, 2>(args) : upload_frame<uint16_t, false, 0, 2>(args);
-    } else {
-        single_texture ? upload_frame<uint8_t, true, 1, 1>(args) : upload_frame<uint8_t, false, 1, 1>(args);
+    switch (bit_depth) {
+        case 16:
+            single_texture ? upload_frame<uint16_t, true, 0, 2, 0>(args) : upload_frame<uint16_t, false, 0, 2, 0>(args);
+            break;
+        case 12:
+            single_texture ? upload_frame<uint16_t, true, 0, 2, 4>(args) : upload_frame<uint16_t, false, 0, 2, 4>(args);
+            break;
+        case 10:
+            single_texture ? upload_frame<uint16_t, true, 0, 2, 6>(args) : upload_frame<uint16_t, false, 0, 2, 6>(args);
+            break;
+        case 8:
+            single_texture ? upload_frame<uint8_t, true, 1, 1, 0>(args) : upload_frame<uint8_t, false, 1, 1, 0>(args);
+            break;
     }
 
 #undef args
