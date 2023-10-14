@@ -35,6 +35,14 @@ AviSynth+: ```madvr_Process(clip: Clip, commands: string[], adapter: bool)```
 
 `commands` is an array of functions to be ran in the madVR filterchain.
 
+The only supported color families are:
+- RGB
+- YUV
+  - 4:2:0
+  - 4:2:2
+  - 4:4:4
+
+All at integer 8-10-12-16 bits precision.
 
 ##### Legend
 - |x|y|z|...| => can be one of x, y, z
