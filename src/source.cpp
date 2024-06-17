@@ -78,10 +78,20 @@ T get_platform_init(const std::wstring platform_name) {
 
     std::wstring plugins_path = get_plugins_path();
 
+    DWORD plug_dir_attrs = GetFileAttributes(plugins_path.c_str());
+
+    if (plug_dir_attrs == INVALID_FILE_ATTRIBUTES || !(plug_dir_attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+        std::wcout << platform_name << "-madVR: Failed to find the madVR folder containing libraries" << std::endl;
+        return nullptr;
+    }
+
     try_load_dll(plugins_path, L"madHcNet" MADVRDLL_SUFFIX_LIB, platform_name);
     try_load_dll(plugins_path, L"mvrSettings" MADVRDLL_SUFFIX_LIB, platform_name);
 
     HMODULE madvr_ax = try_load_dll(plugins_path, L"madVR" MADVRDLL_SUFFIX_AX, platform_name, true);
+
+    if (!madvr_ax)
+        return nullptr;
 
     std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
     *(FARPROC *) &madvr_init = GetProcAddress(madvr_ax, converter.to_bytes(platform_name).c_str());
@@ -262,7 +272,7 @@ VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc
     auto madvr_vs_init = get_platform_init<MADVRVapourSynthInit>(L"VapourSynth");
 
     if (!madvr_vs_init)
-        return vs_fakeConfigFunc("", "", "", 0, 0, nullptr);
+        return;
 
     madvr_vs_init(vs_fakeConfigFunc, registerFunc, plugin, (void *) update_frame, 1);
 }
@@ -273,6 +283,9 @@ extern "C" __declspec(dllexport) const
     AVS_linkage = vectors;
 
     auto madvr_avs_init = get_platform_init<MADVRAviSynthInit>(L"AviSynth");
+
+    if (!madvr_avs_init)
+        return;
 
     return madvr_avs_init(env, vectors, update_frame, 1);
 }
