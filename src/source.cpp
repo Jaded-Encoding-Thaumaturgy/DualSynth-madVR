@@ -285,7 +285,7 @@ extern "C" __declspec(dllexport) const
     auto madvr_avs_init = get_platform_init<MADVRAviSynthInit>(L"AviSynth");
 
     if (!madvr_avs_init)
-        return;
+        return "";
 
     return madvr_avs_init(env, vectors, update_frame, 1);
 }
